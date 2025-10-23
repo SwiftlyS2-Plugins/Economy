@@ -34,12 +34,12 @@ using Economy.Contract;
 // ...
 
 public override void UseSharedInterface(IInterfaceManager interfaceManager)
-	{
-		var api = interfaceManager.GetSharedInterface<IEconomyAPIv1>(
-			"Economy.API.v1"
-		);
-		economyAPI = api;
-	}
+{
+    var api = interfaceManager.GetSharedInterface<IEconomyAPIv1>(
+        "Economy.API.v1"
+    );
+    economyAPI = api;
+}
 ```
 
 ### Wallet Management
