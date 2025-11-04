@@ -59,10 +59,7 @@ public partial class Economy : BasePlugin
 			var player = Core.PlayerManager.GetPlayer(playerid);
 			if (player == null) return;
 
-			_ = Task.Run(() =>
-			{
-				economyAPI.LoadData(player);
-			});
+			economyAPI.LoadData(player);
 		});
 	}
 
@@ -80,13 +77,10 @@ public partial class Economy : BasePlugin
 		{
 			if (economyAPI == null) return;
 
-			_ = Task.Run(() =>
-			{
-				economyAPI.SaveData(steamid);
+			economyAPI.SaveData(steamid);
 
-				playerBalances.TryRemove(steamid, out _);
-				playerBySteamId.TryRemove(steamid, out _);
-			});
+			playerBalances.TryRemove(steamid, out _);
+			playerBySteamId.TryRemove(steamid, out _);
 		});
 	}
 
@@ -98,14 +92,12 @@ public partial class Economy : BasePlugin
 		{
 			Task.Run(() =>
 			{
-				var tasks = new List<Task>();
-
 				while (playerSaveQueue.TryDequeue(out var player))
 				{
 					if (economyAPI == null) continue;
 					if (!player.IsValid) continue;
 
-					_ = Task.Run(() => economyAPI.SaveData(player));
+					economyAPI.SaveData(player);
 				}
 			});
 		});

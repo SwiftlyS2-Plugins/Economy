@@ -9,7 +9,7 @@ namespace Economy.Database.Models;
 public class EconomyPlayer
 {
     [Key]
-    public int Id { get; set; }
+    public ulong Id { get; set; }
 
     [Column("SteamId64")]
     public long SteamId64 { get; set; }

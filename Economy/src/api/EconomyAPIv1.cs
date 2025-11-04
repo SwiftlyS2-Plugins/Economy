@@ -1,5 +1,4 @@
 using System.Collections.Concurrent;
-using System.Text.Json;
 using Dommel;
 using Economy.Contract;
 using Economy.Database.Models;
@@ -73,7 +72,7 @@ public class EconomyAPIv1 : IEconomyAPIv1
                         Balance = []
                     };
                     var id = await connection.InsertAsync(user);
-                    user.Id = (int)id;
+                    user.Id = (ulong)id;
                 }
 
                 user.Balance.TryGetValue(walletKind, out var currentBalance);
@@ -209,7 +208,7 @@ public class EconomyAPIv1 : IEconomyAPIv1
                         Balance = []
                     };
                     var id = await connection.InsertAsync(user);
-                    user.Id = (int)id;
+                    user.Id = (ulong)id;
                 }
 
                 user.Balance.TryGetValue(walletKind, out var currentBalance);
@@ -276,7 +275,7 @@ public class EconomyAPIv1 : IEconomyAPIv1
                         Balance = []
                     };
                     var id = await connection.InsertAsync(user);
-                    user.Id = (int)id;
+                    user.Id = (ulong)id;
                 }
 
                 user.Balance.TryGetValue(walletKind, out var currentBalance);
@@ -394,7 +393,7 @@ public class EconomyAPIv1 : IEconomyAPIv1
                 Balance = []
             };
             var id = connection.Insert(user);
-            user.Id = (int)id;
+            user.Id = (ulong)id;
         }
 
         if (playerBalances.TryGetValue(steamid, out var balances))
