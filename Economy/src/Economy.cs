@@ -37,18 +37,15 @@ public partial class Economy : BasePlugin
 
 	public override void UseSharedInterface(IInterfaceManager interfaceManager)
 	{
-		var api = interfaceManager.GetSharedInterface<IEconomyAPIv1>(
+		economyAPI = interfaceManager.GetSharedInterface<IEconomyAPIv1>(
 			"Economy.API.v1"
 		);
-		economyAPI = api;
 	}
 
-	[EventListener<EventDelegates.OnClientPutInServer>]
-	public void OnClientPutInServer(IOnClientPutInServerEvent @event)
+	[EventListener<EventDelegates.OnClientSteamAuthorize>]
+	public void OnClientSteamAuthorize(IOnClientSteamAuthorizeEvent @event)
 	{
 		var playerid = @event.PlayerId;
-		var kind = @event.Kind;
-		if (kind != ClientKind.Player) return;
 
 		Task.Run(() =>
 		{
