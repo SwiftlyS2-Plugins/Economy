@@ -9,7 +9,7 @@ using SwiftlyS2.Shared.Events;
 
 namespace Economy;
 
-[PluginMetadata(Id = "Economy", Version = "1.0.1", Name = "Economy", Author = "Swiftly Development Team", Description = "The base economy plugin for your server.")]
+[PluginMetadata(Id = "Economy", Version = "1.0.2", Name = "Economy", Author = "Swiftly Development Team", Description = "The base economy plugin for your server.")]
 public partial class Economy : BasePlugin
 {
 	private ConcurrentDictionary<string, bool> walletKinds = new();
