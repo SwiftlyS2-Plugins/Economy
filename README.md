@@ -22,6 +22,10 @@
 - Use the `dotnet publish -c Release` command to build and package your plugin.
 - Distribute the generated zip file or the contents of the `build/publish` directory.
 
+## Database Connection Key
+
+The database connection is using the key `economyapi`. It supports only MySQL, MariaDB and PostgreSQL.
+
 ## API Interface
 
 The Economy plugin provides a comprehensive API through the `IEconomyAPIv1` interface in the [Economy.Contract](Economy.Contract/src/IEconomyAPIv1.cs) namespace. This interface allows other plugins to interact with the economy system.
