@@ -55,7 +55,7 @@ public partial class Economy : BasePlugin
 	public override void ConfigureSharedInterface(IInterfaceManager interfaceManager)
 	{
 		interfaceManager.AddSharedInterface<IEconomyAPIv1, EconomyAPIv1>(
-			"Economy.API.v1", new EconomyAPIv1(Core, ref walletKinds, ref playerBalances, ref playerSaveQueue, ref playerBySteamId)
+			"Economy.API.v1", new EconomyAPIv1(Core, _config, ref walletKinds, ref playerBalances, ref playerSaveQueue, ref playerBySteamId)
 		);
 	}
 

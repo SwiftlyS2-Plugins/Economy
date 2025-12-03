@@ -2,18 +2,25 @@ using System.Collections.Concurrent;
 using Dommel;
 using Economy.Contract;
 using Economy.Database.Models;
+using Microsoft.Extensions.Logging;
 using SwiftlyS2.Shared;
 using SwiftlyS2.Shared.Players;
+
+using static Economy.Economy;
 
 namespace Economy.API;
 
 public class EconomyAPIv1 : IEconomyAPIv1
 {
-    private readonly ISwiftlyCore swiftlyCore;
-    private readonly ConcurrentDictionary<string, bool> walletKinds;
-    private readonly ConcurrentDictionary<ulong, ConcurrentDictionary<string, int>> playerBalances;
-    private readonly ConcurrentQueue<IPlayer> playerSaveQueue;
-    private readonly ConcurrentDictionary<ulong, IPlayer> playerBySteamId;
+    private readonly ISwiftlyCore _core;
+    private readonly PluginConfig _config;
+    private readonly ConcurrentDictionary<string, bool> _walletKinds;
+    private readonly ConcurrentDictionary<ulong, ConcurrentDictionary<string, int>> _playerBalances;
+    private readonly ConcurrentQueue<IPlayer> _playerSaveQueue;
+    private readonly ConcurrentDictionary<ulong, IPlayer> _playerBySteamId;
+
+    // Lock objects for thread-safe balance operations
+    private readonly ConcurrentDictionary<ulong, object> _playerLocks = new();
 
     public event Action<ulong, string, long, long>? OnPlayerBalanceChanged;
     public event Action<ulong, ulong, string, long>? OnPlayerFundsTransferred;
@@ -22,18 +29,22 @@ public class EconomyAPIv1 : IEconomyAPIv1
 
     public EconomyAPIv1(
         ISwiftlyCore core,
+        PluginConfig config,
         ref ConcurrentDictionary<string, bool> walletKinds,
         ref ConcurrentDictionary<ulong, ConcurrentDictionary<string, int>> playerBalances,
         ref ConcurrentQueue<IPlayer> playerSaveQueue,
         ref ConcurrentDictionary<ulong, IPlayer> playerBySteamId
     )
     {
-        swiftlyCore = core;
-        this.walletKinds = walletKinds;
-        this.playerBalances = playerBalances;
-        this.playerSaveQueue = playerSaveQueue;
-        this.playerBySteamId = playerBySteamId;
+        _core = core;
+        _config = config;
+        _walletKinds = walletKinds;
+        _playerBalances = playerBalances;
+        _playerSaveQueue = playerSaveQueue;
+        _playerBySteamId = playerBySteamId;
     }
+
+    private object GetPlayerLock(ulong steamid) => _playerLocks.GetOrAdd(steamid, _ => new object());
 
     public void AddPlayerBalance(IPlayer player, string walletKind, int amount)
     {
@@ -42,7 +53,7 @@ public class EconomyAPIv1 : IEconomyAPIv1
 
     public void AddPlayerBalance(int playerid, string walletKind, int amount)
     {
-        var player = swiftlyCore.PlayerManager.GetPlayer(playerid);
+        var player = _core.PlayerManager.GetPlayer(playerid);
         if (player == null) return;
 
         AddPlayerBalance(player.SteamID, walletKind, amount);
@@ -50,59 +61,75 @@ public class EconomyAPIv1 : IEconomyAPIv1
 
     public void AddPlayerBalance(ulong steamid, string walletKind, int amount)
     {
-        if (!walletKinds.ContainsKey(walletKind))
-        {
+        if (!_walletKinds.ContainsKey(walletKind))
             throw new KeyNotFoundException($"Wallet kind '{walletKind}' does not exist.");
-        }
 
-        if (!playerBySteamId.TryGetValue(steamid, out IPlayer? value))
+        var playerLock = GetPlayerLock(steamid);
+
+        if (!_playerBySteamId.TryGetValue(steamid, out IPlayer? player))
         {
+            // Offline player - update DB directly
             Task.Run(async () =>
             {
-                var connection = swiftlyCore.Database.GetConnection("economyapi");
-
-                var users = await connection.SelectAsync<EconomyPlayer>(u => u.SteamId64 == (long)steamid);
-                var user = users.FirstOrDefault();
-
-                if (user == null)
+                try
                 {
-                    user = new EconomyPlayer
+                    var connection = _core.Database.GetConnection(_config.DatabaseConnection);
+                    var users = await connection.SelectAsync<EconomyPlayer>(u => u.SteamId64 == (long)steamid);
+                    var user = users.FirstOrDefault();
+
+                    if (user == null)
                     {
-                        SteamId64 = (long)steamid,
-                        Balance = []
-                    };
-                    var id = await connection.InsertAsync(user);
-                    user.Id = (ulong)id;
+                        user = new EconomyPlayer
+                        {
+                            SteamId64 = (long)steamid,
+                            Balance = []
+                        };
+                        var id = await connection.InsertAsync(user);
+                        user.Id = (ulong)id;
+                    }
+
+                    lock (playerLock)
+                    {
+                        user.Balance.TryGetValue(walletKind, out var currentBalance);
+                        var oldBalance = currentBalance;
+                        currentBalance += amount;
+                        user.Balance[walletKind] = currentBalance;
+
+                        connection.Update(user);
+                        OnPlayerBalanceChanged?.Invoke(steamid, walletKind, currentBalance, oldBalance);
+                    }
                 }
-
-                user.Balance.TryGetValue(walletKind, out var currentBalance);
-                currentBalance += amount;
-
-                user.Balance[walletKind] = currentBalance;
-                await connection.UpdateAsync(user);
-
-                OnPlayerBalanceChanged?.Invoke(steamid, walletKind, currentBalance, currentBalance - amount);
+                catch (Exception ex)
+                {
+                    _core.Logger.LogError(ex, "Failed to add balance for offline player {SteamId}", steamid);
+                }
             });
         }
         else
         {
-            if (!playerBalances[steamid].ContainsKey(walletKind))
+            // Online player - update cache
+            lock (playerLock)
             {
-                playerBalances[steamid][walletKind] = 0;
-            }
-            playerBalances[steamid][walletKind] += amount;
+                if (!_playerBalances.TryGetValue(steamid, out var balances))
+                {
+                    balances = new ConcurrentDictionary<string, int>();
+                    _playerBalances[steamid] = balances;
+                }
 
-            playerSaveQueue.Enqueue(value);
-            OnPlayerBalanceChanged?.Invoke(steamid, walletKind, playerBalances[steamid][walletKind], playerBalances[steamid][walletKind] - amount);
+                balances.TryGetValue(walletKind, out var currentBalance);
+                var oldBalance = currentBalance;
+                currentBalance += amount;
+                balances[walletKind] = currentBalance;
+
+                _playerSaveQueue.Enqueue(player);
+                OnPlayerBalanceChanged?.Invoke(steamid, walletKind, currentBalance, oldBalance);
+            }
         }
     }
 
     public void EnsureWalletKind(string kindName)
     {
-        if (!walletKinds.ContainsKey(kindName))
-        {
-            walletKinds[kindName] = true;
-        }
+        _walletKinds.TryAdd(kindName, true);
     }
 
     public int GetPlayerBalance(IPlayer player, string walletKind)
@@ -112,7 +139,7 @@ public class EconomyAPIv1 : IEconomyAPIv1
 
     public int GetPlayerBalance(int playerid, string walletKind)
     {
-        var player = swiftlyCore.PlayerManager.GetPlayer(playerid);
+        var player = _core.PlayerManager.GetPlayer(playerid);
         if (player == null) return 0;
 
         return GetPlayerBalance(player.SteamID, walletKind);
@@ -120,31 +147,21 @@ public class EconomyAPIv1 : IEconomyAPIv1
 
     public int GetPlayerBalance(ulong steamid, string walletKind)
     {
-        if (!walletKinds.ContainsKey(walletKind))
-        {
+        if (!_walletKinds.ContainsKey(walletKind))
             throw new KeyNotFoundException($"Wallet kind '{walletKind}' does not exist.");
-        }
 
-        if (!playerBalances.ContainsKey(steamid))
-        {
-            var connection = swiftlyCore.Database.GetConnection("economyapi");
+        // Try cache first
+        if (_playerBalances.TryGetValue(steamid, out var balances) && balances.TryGetValue(walletKind, out var cachedBalance))
+            return cachedBalance;
 
-            var users = connection.Select<EconomyPlayer>(u => u.SteamId64 == (long)steamid);
-            var user = users.FirstOrDefault();
+        // Fallback to DB for offline players
+        var connection = _core.Database.GetConnection(_config.DatabaseConnection);
+        var users = connection.Select<EconomyPlayer>(u => u.SteamId64 == (long)steamid);
+        var user = users.FirstOrDefault();
 
-            if (user == null) return 0;
+        if (user == null) return 0;
 
-            return user.Balance.TryGetValue(walletKind, out var balance) ? (int)balance : 0;
-        }
-        else
-        {
-            if (playerBalances[steamid].ContainsKey(walletKind))
-            {
-                return playerBalances[steamid][walletKind];
-            }
-
-            return 0;
-        }
+        return user.Balance.TryGetValue(walletKind, out var balance) ? (int)balance : 0;
     }
 
     public bool HasSufficientFunds(IPlayer player, string walletKind, int amount)
@@ -154,7 +171,7 @@ public class EconomyAPIv1 : IEconomyAPIv1
 
     public bool HasSufficientFunds(int playerid, string walletKind, int amount)
     {
-        var player = swiftlyCore.PlayerManager.GetPlayer(playerid);
+        var player = _core.PlayerManager.GetPlayer(playerid);
         if (player == null) return false;
 
         return HasSufficientFunds(player.SteamID, walletKind, amount);
@@ -162,10 +179,8 @@ public class EconomyAPIv1 : IEconomyAPIv1
 
     public bool HasSufficientFunds(ulong steamid, string walletKind, int amount)
     {
-        if (!walletKinds.ContainsKey(walletKind))
-        {
+        if (!_walletKinds.ContainsKey(walletKind))
             throw new KeyNotFoundException($"Wallet kind '{walletKind}' does not exist.");
-        }
 
         var balance = GetPlayerBalance(steamid, walletKind);
         return balance >= amount;
@@ -178,7 +193,7 @@ public class EconomyAPIv1 : IEconomyAPIv1
 
     public void SetPlayerBalance(int playerid, string walletKind, int amount)
     {
-        var player = swiftlyCore.PlayerManager.GetPlayer(playerid);
+        var player = _core.PlayerManager.GetPlayer(playerid);
         if (player == null) return;
 
         SetPlayerBalance(player.SteamID, walletKind, amount);
@@ -186,55 +201,67 @@ public class EconomyAPIv1 : IEconomyAPIv1
 
     public void SetPlayerBalance(ulong steamid, string walletKind, int amount)
     {
-        if (!walletKinds.ContainsKey(walletKind))
-        {
+        if (!_walletKinds.ContainsKey(walletKind))
             throw new KeyNotFoundException($"Wallet kind '{walletKind}' does not exist.");
-        }
 
-        if (!playerBySteamId.TryGetValue(steamid, out IPlayer? value))
+        // Block negative if not allowed
+        if (!_config.AllowNegativeBalance && amount < 0)
+            amount = 0;
+
+        var playerLock = GetPlayerLock(steamid);
+
+        if (!_playerBySteamId.TryGetValue(steamid, out IPlayer? player))
         {
             Task.Run(async () =>
             {
-                var connection = swiftlyCore.Database.GetConnection("economyapi");
-
-                var users = await connection.SelectAsync<EconomyPlayer>(u => u.SteamId64 == (long)steamid);
-                var user = users.FirstOrDefault();
-
-                if (user == null)
+                try
                 {
-                    user = new EconomyPlayer
+                    var connection = _core.Database.GetConnection(_config.DatabaseConnection);
+                    var users = await connection.SelectAsync<EconomyPlayer>(u => u.SteamId64 == (long)steamid);
+                    var user = users.FirstOrDefault();
+
+                    if (user == null)
                     {
-                        SteamId64 = (long)steamid,
-                        Balance = []
-                    };
-                    var id = await connection.InsertAsync(user);
-                    user.Id = (ulong)id;
+                        user = new EconomyPlayer
+                        {
+                            SteamId64 = (long)steamid,
+                            Balance = []
+                        };
+                        var id = await connection.InsertAsync(user);
+                        user.Id = (ulong)id;
+                    }
+
+                    lock (playerLock)
+                    {
+                        user.Balance.TryGetValue(walletKind, out var oldBalance);
+                        user.Balance[walletKind] = amount;
+
+                        connection.Update(user);
+                        OnPlayerBalanceChanged?.Invoke(steamid, walletKind, amount, oldBalance);
+                    }
                 }
-
-                user.Balance.TryGetValue(walletKind, out var currentBalance);
-                var oldBalance = currentBalance;
-                currentBalance = amount;
-
-                user.Balance[walletKind] = currentBalance;
-
-                OnPlayerBalanceChanged?.Invoke(steamid, walletKind, amount, oldBalance);
-
-                await connection.UpdateAsync(user);
+                catch (Exception ex)
+                {
+                    _core.Logger.LogError(ex, "Failed to set balance for offline player {SteamId}", steamid);
+                }
             });
         }
         else
         {
-            if (!playerBalances[steamid].ContainsKey(walletKind))
+            lock (playerLock)
             {
-                playerBalances[steamid][walletKind] = 0;
+                if (!_playerBalances.TryGetValue(steamid, out var balances))
+                {
+                    balances = new ConcurrentDictionary<string, int>();
+                    _playerBalances[steamid] = balances;
+                }
+
+                balances.TryGetValue(walletKind, out var oldBalance);
+                balances[walletKind] = amount;
+
+                _playerSaveQueue.Enqueue(player);
+                OnPlayerBalanceChanged?.Invoke(steamid, walletKind, amount, oldBalance);
             }
-
-            var currentBalance = playerBalances[steamid][walletKind];
-
-            playerBalances[steamid][walletKind] = amount;
-
-            playerSaveQueue.Enqueue(value);
-            OnPlayerBalanceChanged?.Invoke(steamid, walletKind, amount, currentBalance);
         }
     }
 
@@ -245,7 +272,7 @@ public class EconomyAPIv1 : IEconomyAPIv1
 
     public void SubtractPlayerBalance(int playerid, string walletKind, int amount)
     {
-        var player = swiftlyCore.PlayerManager.GetPlayer(playerid);
+        var player = _core.PlayerManager.GetPlayer(playerid);
         if (player == null) return;
 
         SubtractPlayerBalance(player.SteamID, walletKind, amount);
@@ -253,50 +280,76 @@ public class EconomyAPIv1 : IEconomyAPIv1
 
     public void SubtractPlayerBalance(ulong steamid, string walletKind, int amount)
     {
-        if (!walletKinds.ContainsKey(walletKind))
-        {
+        if (!_walletKinds.ContainsKey(walletKind))
             throw new KeyNotFoundException($"Wallet kind '{walletKind}' does not exist.");
-        }
 
-        if (!playerBySteamId.TryGetValue(steamid, out IPlayer? value))
+        var playerLock = GetPlayerLock(steamid);
+
+        if (!_playerBySteamId.TryGetValue(steamid, out IPlayer? player))
         {
             Task.Run(async () =>
             {
-                var connection = swiftlyCore.Database.GetConnection("economyapi");
-
-                var users = await connection.SelectAsync<EconomyPlayer>(u => u.SteamId64 == (long)steamid);
-                var user = users.FirstOrDefault();
-
-                if (user == null)
+                try
                 {
-                    user = new EconomyPlayer
+                    var connection = _core.Database.GetConnection(_config.DatabaseConnection);
+                    var users = await connection.SelectAsync<EconomyPlayer>(u => u.SteamId64 == (long)steamid);
+                    var user = users.FirstOrDefault();
+
+                    if (user == null)
                     {
-                        SteamId64 = (long)steamid,
-                        Balance = []
-                    };
-                    var id = await connection.InsertAsync(user);
-                    user.Id = (ulong)id;
+                        user = new EconomyPlayer
+                        {
+                            SteamId64 = (long)steamid,
+                            Balance = []
+                        };
+                        var id = await connection.InsertAsync(user);
+                        user.Id = (ulong)id;
+                    }
+
+                    lock (playerLock)
+                    {
+                        user.Balance.TryGetValue(walletKind, out var currentBalance);
+                        var oldBalance = currentBalance;
+                        currentBalance -= amount;
+
+                        // Clamp to 0 if negative not allowed
+                        if (!_config.AllowNegativeBalance && currentBalance < 0)
+                            currentBalance = 0;
+
+                        user.Balance[walletKind] = currentBalance;
+                        connection.Update(user);
+                        OnPlayerBalanceChanged?.Invoke(steamid, walletKind, currentBalance, oldBalance);
+                    }
                 }
-
-                user.Balance.TryGetValue(walletKind, out var currentBalance);
-                currentBalance -= amount;
-
-                user.Balance[walletKind] = currentBalance;
-                OnPlayerBalanceChanged?.Invoke(steamid, walletKind, currentBalance, currentBalance + amount);
-                await connection.UpdateAsync(user);
+                catch (Exception ex)
+                {
+                    _core.Logger.LogError(ex, "Failed to subtract balance for offline player {SteamId}", steamid);
+                }
             });
         }
         else
         {
-            if (!playerBalances[steamid].ContainsKey(walletKind))
+            lock (playerLock)
             {
-                playerBalances[steamid][walletKind] = 0;
+                if (!_playerBalances.TryGetValue(steamid, out var balances))
+                {
+                    balances = new ConcurrentDictionary<string, int>();
+                    _playerBalances[steamid] = balances;
+                }
+
+                balances.TryGetValue(walletKind, out var currentBalance);
+                var oldBalance = currentBalance;
+                currentBalance -= amount;
+
+                // Clamp to 0 if negative not allowed
+                if (!_config.AllowNegativeBalance && currentBalance < 0)
+                    currentBalance = 0;
+
+                balances[walletKind] = currentBalance;
+
+                _playerSaveQueue.Enqueue(player);
+                OnPlayerBalanceChanged?.Invoke(steamid, walletKind, currentBalance, oldBalance);
             }
-
-            playerBalances[steamid][walletKind] -= amount;
-            OnPlayerBalanceChanged?.Invoke(steamid, walletKind, playerBalances[steamid][walletKind], playerBalances[steamid][walletKind] + amount);
-
-            playerSaveQueue.Enqueue(value);
         }
     }
 
@@ -307,8 +360,8 @@ public class EconomyAPIv1 : IEconomyAPIv1
 
     public void TransferFunds(int fromPlayerid, int toPlayerid, string walletKind, int amount)
     {
-        var fromPlayer = swiftlyCore.PlayerManager.GetPlayer(fromPlayerid);
-        var toPlayer = swiftlyCore.PlayerManager.GetPlayer(toPlayerid);
+        var fromPlayer = _core.PlayerManager.GetPlayer(fromPlayerid);
+        var toPlayer = _core.PlayerManager.GetPlayer(toPlayerid);
         if (fromPlayer == null || toPlayer == null) return;
 
         TransferFunds(fromPlayer.SteamID, toPlayer.SteamID, walletKind, amount);
@@ -316,10 +369,12 @@ public class EconomyAPIv1 : IEconomyAPIv1
 
     public void TransferFunds(ulong fromSteamid, ulong toSteamid, string walletKind, int amount)
     {
-        if (!walletKinds.ContainsKey(walletKind))
-        {
+        if (!_walletKinds.ContainsKey(walletKind))
             throw new KeyNotFoundException($"Wallet kind '{walletKind}' does not exist.");
-        }
+
+        // Check funds before transfer (unless negative allowed)
+        if (!_config.AllowNegativeBalance && !HasSufficientFunds(fromSteamid, walletKind, amount))
+            throw new InvalidOperationException($"Insufficient funds for transfer. Required: {amount}");
 
         SubtractPlayerBalance(fromSteamid, walletKind, amount);
         AddPlayerBalance(toSteamid, walletKind, amount);
@@ -329,39 +384,48 @@ public class EconomyAPIv1 : IEconomyAPIv1
 
     public bool WalletKindExists(string kindName)
     {
-        return walletKinds.ContainsKey(kindName);
+        return _walletKinds.ContainsKey(kindName);
     }
 
     public void LoadData(IPlayer player)
     {
-        playerBySteamId[player.SteamID] = player;
+        _playerBySteamId[player.SteamID] = player;
 
-        var database = swiftlyCore.Database.GetConnection("economyapi");
-        var users = database.Select<EconomyPlayer>(p => p.SteamId64 == (long)player.SteamID);
-        var user = users.FirstOrDefault();
-
-        if (user != null)
+        try
         {
-            foreach (var (walletKind, balance) in user.Balance)
+            var database = _core.Database.GetConnection(_config.DatabaseConnection);
+            var users = database.Select<EconomyPlayer>(p => p.SteamId64 == (long)player.SteamID);
+            var user = users.FirstOrDefault();
+
+            // Init player balance dict
+            var balances = _playerBalances.GetOrAdd(player.SteamID, _ => new ConcurrentDictionary<string, int>());
+
+            if (user != null)
             {
-                try
+                foreach (var (walletKind, balance) in user.Balance)
                 {
-                    SetPlayerBalance(player.SteamID, walletKind, (int)balance);
+                    // Only load known wallet kinds
+                    if (_walletKinds.ContainsKey(walletKind))
+                        balances[walletKind] = (int)balance;
                 }
-                catch { }
             }
-        }
-        else
-        {
-            var newUser = new EconomyPlayer
+            else
             {
-                SteamId64 = (long)player.SteamID,
-                Balance = []
-            };
-            database.Insert(newUser);
-        }
+                // New player - create DB record
+                var newUser = new EconomyPlayer
+                {
+                    SteamId64 = (long)player.SteamID,
+                    Balance = []
+                };
+                database.Insert(newUser);
+            }
 
-        OnPlayerLoad?.Invoke(player);
+            OnPlayerLoad?.Invoke(player);
+        }
+        catch (Exception ex)
+        {
+            _core.Logger.LogError(ex, "Failed to load economy data for player {SteamId}", player.SteamID);
+        }
     }
 
     public void SaveData(IPlayer player)
@@ -369,9 +433,10 @@ public class EconomyAPIv1 : IEconomyAPIv1
         SaveData(player.SteamID);
         OnPlayerSave?.Invoke(player);
     }
+
     public void SaveData(int playerid)
     {
-        var player = swiftlyCore.PlayerManager.GetPlayer(playerid);
+        var player = _core.PlayerManager.GetPlayer(playerid);
         if (player == null) return;
 
         SaveData(player.SteamID);
@@ -380,30 +445,36 @@ public class EconomyAPIv1 : IEconomyAPIv1
 
     public void SaveData(ulong steamid)
     {
-        var connection = swiftlyCore.Database.GetConnection("economyapi");
-
-        var users = connection.Select<EconomyPlayer>(u => u.SteamId64 == (long)steamid);
-        var user = users.FirstOrDefault();
-
-        if (user == null)
+        try
         {
-            user = new EconomyPlayer
-            {
-                SteamId64 = (long)steamid,
-                Balance = []
-            };
-            var id = connection.Insert(user);
-            user.Id = (ulong)id;
-        }
+            var connection = _core.Database.GetConnection(_config.DatabaseConnection);
+            var users = connection.Select<EconomyPlayer>(u => u.SteamId64 == (long)steamid);
+            var user = users.FirstOrDefault();
 
-        if (playerBalances.TryGetValue(steamid, out var balances))
-        {
-            foreach (var (walletKind, balance) in balances)
+            if (user == null)
             {
-                user.Balance[walletKind] = balance;
+                user = new EconomyPlayer
+                {
+                    SteamId64 = (long)steamid,
+                    Balance = []
+                };
+                var id = connection.Insert(user);
+                user.Id = (ulong)id;
             }
-        }
 
-        connection.Update(user);
+            if (_playerBalances.TryGetValue(steamid, out var balances))
+            {
+                foreach (var (walletKind, balance) in balances)
+                {
+                    user.Balance[walletKind] = balance;
+                }
+            }
+
+            connection.Update(user);
+        }
+        catch (Exception ex)
+        {
+            _core.Logger.LogError(ex, "Failed to save economy data for player {SteamId}", steamid);
+        }
     }
 }
