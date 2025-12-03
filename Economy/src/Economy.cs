@@ -105,7 +105,7 @@ public partial class Economy : BasePlugin
 
 	public override void Load(bool hotReload)
 	{
-		if (saveTaskCancellationTokenSource != null) saveTaskCancellationTokenSource.Cancel();
+		saveTaskCancellationTokenSource?.Cancel();
 
 		saveTaskCancellationTokenSource = Core.Scheduler.RepeatBySeconds(10, () =>
 		{
