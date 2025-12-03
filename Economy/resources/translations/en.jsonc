@@ -1,0 +1,44 @@
+{
+  "economy.prefix": "[silver][ [lime]Economy [silver]]",
+
+  // Balance display
+  "economy.balance.header": "[silver]Your balances:",
+  "economy.balance.item": " > [lime]{0}[silver]: [green]{1}",
+
+  // Usage messages (with {0}=mainCmd, {1}=subCmd)
+  "economy.usage.give": "[yellow]Usage: !{0} {1} <target> <amount> <wallet>",
+  "economy.usage.take": "[yellow]Usage: !{0} {1} <target> <amount> <wallet>",
+  "economy.usage.set": "[yellow]Usage: !{0} {1} <target> <amount> <wallet>",
+  "economy.usage.pay": "[yellow]Usage: !{0} {1} <player> <amount> <wallet>",
+  "economy.usage.wallet_hint": "[silver]Check available wallets with [yellow]!{0}",
+
+  // Help
+  "economy.help.available": "[silver]Commands: [yellow]{0}",
+
+  // Error messages
+  "economy.error.no_target": "[lightred]No target found.",
+  "economy.error.invalid_amount": "[lightred]Invalid amount. Must be a valid number.",
+  "economy.error.invalid_wallet": "[lightred]Wallet type '{0}' does not exist.",
+  "economy.error.no_permission": "[lightred]You don't have permission to use this command.",
+  "economy.error.pay_self": "[lightred]You cannot pay yourself.",
+  "economy.error.insufficient_funds": "[lightred]Insufficient funds.",
+
+  // Wallets
+  "economy.wallets.empty": "[yellow]No wallet types registered.",
+
+  // Give command
+  "economy.give.success": "[silver]Gave [lime]{0} {1}[silver] to [lime]{2}[silver].",
+  "economy.give.received": "[silver]You received [lime]{0} {1}[silver] from [lime]{2}[silver].",
+
+  // Take command
+  "economy.take.success": "[silver]Took [lime]{0} {1}[silver] from [lime]{2}[silver].",
+  "economy.take.removed": "[silver][lime]{0} {1}[silver] was removed by [lime]{2}[silver].",
+
+  // Set command
+  "economy.set.success": "[silver]Set [lime]{0}[silver]'s balance to [lime]{1} {2}[silver].",
+  "economy.set.changed": "[silver]Your balance was set to [lime]{0} {1}[silver] by [lime]{2}[silver].",
+
+  // Pay command
+  "economy.pay.success": "[silver]Paid [lime]{0} {1}[silver] to [lime]{2}[silver].",
+  "economy.pay.received": "[silver]You received [lime]{0} {1}[silver] from [lime]{2}[silver]."
+}

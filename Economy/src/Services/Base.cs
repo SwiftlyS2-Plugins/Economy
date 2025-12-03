@@ -53,6 +53,11 @@ public partial class EconomyService(ISwiftlyCore core, PluginConfig config)
 		return _walletKinds.ContainsKey(kindName);
 	}
 
+	public List<string> GetWalletKinds()
+	{
+		return [.. _walletKinds.Keys];
+	}
+
 	/* ==================== Internal Helpers ==================== */
 
 	private object GetPlayerLock(ulong steamId) => _playerLocks.GetOrAdd(steamId, _ => new object());

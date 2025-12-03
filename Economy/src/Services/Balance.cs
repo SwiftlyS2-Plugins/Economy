@@ -11,12 +11,16 @@ public partial class EconomyService
 	/* ==================== Get Balance ==================== */
 
 	public int GetPlayerBalance(IPlayer player, string walletKind)
-		=> GetPlayerBalance(player.SteamID, walletKind);
+	{
+		if (player.IsFakeClient) return 0;
+		return GetPlayerBalance(player.SteamID, walletKind);
+	}
 
 	public int GetPlayerBalance(int playerId, string walletKind)
 	{
 		var player = _core.PlayerManager.GetPlayer(playerId);
-		return player == null ? 0 : GetPlayerBalance(player.SteamID, walletKind);
+		if (player == null || player.IsFakeClient) return 0;
+		return GetPlayerBalance(player.SteamID, walletKind);
 	}
 
 	public int GetPlayerBalance(ulong steamId, string walletKind)
@@ -36,12 +40,16 @@ public partial class EconomyService
 	/* ==================== Has Sufficient Funds ==================== */
 
 	public bool HasSufficientFunds(IPlayer player, string walletKind, int amount)
-		=> HasSufficientFunds(player.SteamID, walletKind, amount);
+	{
+		if (player.IsFakeClient) return false;
+		return HasSufficientFunds(player.SteamID, walletKind, amount);
+	}
 
 	public bool HasSufficientFunds(int playerId, string walletKind, int amount)
 	{
 		var player = _core.PlayerManager.GetPlayer(playerId);
-		return player != null && HasSufficientFunds(player.SteamID, walletKind, amount);
+		if (player == null || player.IsFakeClient) return false;
+		return HasSufficientFunds(player.SteamID, walletKind, amount);
 	}
 
 	public bool HasSufficientFunds(ulong steamId, string walletKind, int amount)
@@ -55,12 +63,16 @@ public partial class EconomyService
 	/* ==================== Set Balance ==================== */
 
 	public void SetPlayerBalance(IPlayer player, string walletKind, int amount)
-		=> SetPlayerBalance(player.SteamID, walletKind, amount);
+	{
+		if (player.IsFakeClient) return;
+		SetPlayerBalance(player.SteamID, walletKind, amount);
+	}
 
 	public void SetPlayerBalance(int playerId, string walletKind, int amount)
 	{
 		var player = _core.PlayerManager.GetPlayer(playerId);
-		if (player != null) SetPlayerBalance(player.SteamID, walletKind, amount);
+		if (player == null || player.IsFakeClient) return;
+		SetPlayerBalance(player.SteamID, walletKind, amount);
 	}
 
 	public void SetPlayerBalance(ulong steamId, string walletKind, int amount)
@@ -118,12 +130,16 @@ public partial class EconomyService
 	/* ==================== Add Balance ==================== */
 
 	public void AddPlayerBalance(IPlayer player, string walletKind, int amount)
-		=> AddPlayerBalance(player.SteamID, walletKind, amount);
+	{
+		if (player.IsFakeClient) return;
+		AddPlayerBalance(player.SteamID, walletKind, amount);
+	}
 
 	public void AddPlayerBalance(int playerId, string walletKind, int amount)
 	{
 		var player = _core.PlayerManager.GetPlayer(playerId);
-		if (player != null) AddPlayerBalance(player.SteamID, walletKind, amount);
+		if (player == null || player.IsFakeClient) return;
+		AddPlayerBalance(player.SteamID, walletKind, amount);
 	}
 
 	public void AddPlayerBalance(ulong steamId, string walletKind, int amount)
@@ -180,12 +196,16 @@ public partial class EconomyService
 	/* ==================== Subtract Balance ==================== */
 
 	public void SubtractPlayerBalance(IPlayer player, string walletKind, int amount)
-		=> SubtractPlayerBalance(player.SteamID, walletKind, amount);
+	{
+		if (player.IsFakeClient) return;
+		SubtractPlayerBalance(player.SteamID, walletKind, amount);
+	}
 
 	public void SubtractPlayerBalance(int playerId, string walletKind, int amount)
 	{
 		var player = _core.PlayerManager.GetPlayer(playerId);
-		if (player != null) SubtractPlayerBalance(player.SteamID, walletKind, amount);
+		if (player == null || player.IsFakeClient) return;
+		SubtractPlayerBalance(player.SteamID, walletKind, amount);
 	}
 
 	public void SubtractPlayerBalance(ulong steamId, string walletKind, int amount)

@@ -1,7 +1,10 @@
 using SwiftlyS2.Shared.Plugins;
 using SwiftlyS2.Shared;
+using SwiftlyS2.Shared.Commands;
+using SwiftlyS2.Shared.Players;
 using Economy.Database;
 using Economy.Api;
+using Economy.Commands;
 using Economy.Contract;
 using Economy.Config;
 using Economy.Services;
@@ -20,6 +23,11 @@ public partial class Economy : BasePlugin
 	private EconomyService? _economyService;
 	private PluginConfig _config = null!;
 	private CancellationTokenSource? _saveTaskCancellationTokenSource;
+
+	// Public accessors for commands
+	internal new ISwiftlyCore Core => base.Core;
+	internal PluginConfig Config => _config;
+	internal EconomyService EconomyService => _economyService!;
 
 	public Economy(ISwiftlyCore core) : base(core)
 	{
@@ -127,6 +135,7 @@ public partial class Economy : BasePlugin
 	public override void Load(bool hotReload)
 	{
 		RegisterRoundEvents();
+		RegisterCommands();
 		StartSaveQueueProcessor();
 	}
 
@@ -160,5 +169,38 @@ public partial class Economy : BasePlugin
 				}
 			});
 		});
+	}
+
+	/* ==================== Commands ==================== */
+
+	private void RegisterCommands()
+	{
+		var mainCmd = _config.Commands.MainCommand;
+		if (string.IsNullOrEmpty(mainCmd))
+			return;
+
+		// Register main command
+		Core.Command.RegisterCommand(mainCmd, ctx => EcoCommand.OnCommand(this, ctx));
+
+		// Register aliases
+		foreach (var alias in _config.Commands.MainCommandAliases)
+		{
+			Core.Command.RegisterCommandAlias(mainCmd, alias);
+		}
+	}
+
+	/* ==================== Helpers ==================== */
+
+	internal IEnumerable<IPlayer> FindTargets(IPlayer sender, string target, bool allowMultiple = true, bool requireAlive = false)
+	{
+		var searchMode = TargetSearchMode.IncludeSelf;
+
+		if (!allowMultiple)
+			searchMode |= TargetSearchMode.NoMultipleTargets;
+
+		if (requireAlive)
+			searchMode |= TargetSearchMode.Alive;
+
+		return Core.PlayerManager.FindTargettedPlayers(sender, target, searchMode);
 	}
 }

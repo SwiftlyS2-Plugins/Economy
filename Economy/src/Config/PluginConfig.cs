@@ -27,4 +27,59 @@ public sealed class PluginConfig
 	/// Example: ["credits", "coins", "tokens"]
 	/// </summary>
 	public List<string> WalletKinds { get; set; } = ["credits"];
+
+	/// <summary>Command settings</summary>
+	public CommandSettings Commands { get; set; } = new();
+}
+
+/// <summary>
+/// Command configuration settings
+/// </summary>
+public sealed class CommandSettings
+{
+	/// <summary>Main economy command (shows balance + help)</summary>
+	public string MainCommand { get; set; } = "eco";
+
+	/// <summary>Aliases for main command</summary>
+	public List<string> MainCommandAliases { get; set; } = ["economy"];
+
+	/// <summary>Give subcommand name</summary>
+	public SubCommandConfig Give { get; set; } = new()
+	{
+		Name = "give",
+		Permission = "economy.admin"
+	};
+
+	/// <summary>Take subcommand name</summary>
+	public SubCommandConfig Take { get; set; } = new()
+	{
+		Name = "take",
+		Permission = "economy.admin"
+	};
+
+	/// <summary>Set subcommand name</summary>
+	public SubCommandConfig Set { get; set; } = new()
+	{
+		Name = "set",
+		Permission = "economy.admin"
+	};
+
+	/// <summary>Pay subcommand for player-to-player transfers</summary>
+	public SubCommandConfig Pay { get; set; } = new()
+	{
+		Name = "pay",
+		Permission = ""
+	};
+}
+
+/// <summary>
+/// Subcommand configuration
+/// </summary>
+public sealed class SubCommandConfig
+{
+	/// <summary>Subcommand name (e.g., "give" for !eco give)</summary>
+	public string Name { get; set; } = "";
+
+	/// <summary>Required permission (empty for no permission required)</summary>
+	public string Permission { get; set; } = "";
 }

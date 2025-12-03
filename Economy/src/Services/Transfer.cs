@@ -8,13 +8,18 @@ public partial class EconomyService
 	/* ==================== Transfer Funds ==================== */
 
 	public bool TransferFunds(IPlayer fromPlayer, IPlayer toPlayer, string walletKind, int amount)
-		=> TransferFunds(fromPlayer.SteamID, toPlayer.SteamID, walletKind, amount);
+	{
+		// Bots don't have economy
+		if (fromPlayer.IsFakeClient || toPlayer.IsFakeClient) return false;
+		return TransferFunds(fromPlayer.SteamID, toPlayer.SteamID, walletKind, amount);
+	}
 
 	public bool TransferFunds(int fromPlayerId, int toPlayerId, string walletKind, int amount)
 	{
 		var fromPlayer = _core.PlayerManager.GetPlayer(fromPlayerId);
 		var toPlayer = _core.PlayerManager.GetPlayer(toPlayerId);
-		if (fromPlayer == null || toPlayer == null) return false;
+		// Bots don't have economy
+		if (fromPlayer == null || toPlayer == null || fromPlayer.IsFakeClient || toPlayer.IsFakeClient) return false;
 
 		return TransferFunds(fromPlayer.SteamID, toPlayer.SteamID, walletKind, amount);
 	}
