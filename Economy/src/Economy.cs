@@ -6,10 +6,13 @@ using Economy.API;
 using System.Collections.Concurrent;
 using SwiftlyS2.Shared.Players;
 using SwiftlyS2.Shared.Events;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 
 namespace Economy;
 
-[PluginMetadata(Id = "Economy", Version = "1.0.2", Name = "Economy", Author = "Swiftly Development Team", Description = "The base economy plugin for your server.")]
+[PluginMetadata(Id = "Economy", Version = "1.0.3", Name = "Economy", Author = "Swiftly Development Team", Description = "The base economy plugin for your server.")]
 public partial class Economy : BasePlugin
 {
 	private ConcurrentDictionary<string, bool> walletKinds = new();
@@ -19,13 +22,34 @@ public partial class Economy : BasePlugin
 	private CancellationTokenSource? saveTaskCancellationTokenSource;
 
 	private IEconomyAPIv1? economyAPI;
+	private PluginConfig _config = null!;
 
 	public Economy(ISwiftlyCore core) : base(core)
 	{
-		var connection = core.Database.GetConnection("economyapi");
-		var connectionString = core.Database.GetConnectionString("economyapi");
+		LoadConfiguration();
+
+		var connection = core.Database.GetConnection(_config.DatabaseConnection);
+		var connectionString = core.Database.GetConnectionString(_config.DatabaseConnection);
 
 		MigrationRunner.RunMigrations(connection, connectionString);
+	}
+
+	private void LoadConfiguration()
+	{
+		const string ConfigFileName = "config.json";
+		const string ConfigSection = "Economy";
+
+		Core.Configuration
+			.InitializeJsonWithModel<PluginConfig>(ConfigFileName, ConfigSection)
+			.Configure(cfg => cfg.AddJsonFile(Core.Configuration.GetConfigPath(ConfigFileName), optional: false, reloadOnChange: false));
+
+		ServiceCollection services = new();
+		services.AddSwiftly(Core)
+			.AddOptionsWithValidateOnStart<PluginConfig>()
+			.BindConfiguration(ConfigSection);
+
+		var provider = services.BuildServiceProvider();
+		_config = provider.GetRequiredService<IOptions<PluginConfig>>().Value;
 	}
 
 	public override void ConfigureSharedInterface(IInterfaceManager interfaceManager)
