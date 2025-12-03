@@ -18,9 +18,9 @@ public class EconomyPlayer
     public string BalanceJson
     {
         get => JsonSerializer.Serialize(Balance);
-        set => Balance = JsonSerializer.Deserialize<Dictionary<string, long>>(value) ?? [];
+        set => Balance = JsonSerializer.Deserialize<Dictionary<string, long>>(value) ?? new();
     }
 
     [Ignore]
-    public Dictionary<string, long> Balance { get; set; } = [];
+    public Dictionary<string, long> Balance { get; set; } = new();
 }
