@@ -17,7 +17,7 @@ using Microsoft.Extensions.Options;
 
 namespace Economy;
 
-[PluginMetadata(Id = "Economy", Version = "2.0.0", Name = "Economy", Author = "Swiftly Development Team", Description = "The base economy plugin for your server.")]
+[PluginMetadata(Id = "Economy", Version = "2.0.1", Name = "Economy", Author = "Swiftly Development Team", Description = "The base economy plugin for your server.")]
 public partial class Economy : BasePlugin
 {
 	private EconomyService? _economyService;
@@ -34,9 +34,8 @@ public partial class Economy : BasePlugin
 		LoadConfiguration();
 
 		var connection = core.Database.GetConnection(_config.DatabaseConnection);
-		var connectionString = core.Database.GetConnectionString(_config.DatabaseConnection);
 
-		MigrationRunner.RunMigrations(connection, connectionString);
+		MigrationRunner.RunMigrations(connection);
 	}
 
 	private void LoadConfiguration()

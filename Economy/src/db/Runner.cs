@@ -1,27 +1,21 @@
 using System.Data;
+using System.Data.SQLite;
 using FluentMigrator.Runner;
 using Microsoft.Extensions.DependencyInjection;
+using MySqlConnector;
+using Npgsql;
 
 namespace Economy.Database;
 
 public class MigrationRunner
 {
-    public static void RunMigrations(IDbConnection dbConnection, string dbConnString)
+    public static void RunMigrations(IDbConnection dbConnection)
     {
         var serviceProvider = new ServiceCollection()
             .AddFluentMigratorCore()
             .ConfigureRunner((rb) =>
             {
-                if (dbConnString.StartsWith("mysql", StringComparison.OrdinalIgnoreCase))
-                {
-                    rb.AddMySql5();
-                }
-                else if (dbConnString.StartsWith("postgresql", StringComparison.OrdinalIgnoreCase))
-                {
-                    rb.AddPostgres();
-                }
-                else throw new Exception("Unsupported database type.");
-
+                ConfigureDatabase(rb, dbConnection);
                 rb.WithGlobalConnectionString(dbConnection.ConnectionString).ScanIn(typeof(MigrationRunner).Assembly).For.Migrations();
             })
             .AddLogging(lb => lb.AddFluentMigratorConsole())
@@ -30,5 +24,25 @@ public class MigrationRunner
         using var scope = serviceProvider.CreateScope();
         var runner = scope.ServiceProvider.GetRequiredService<IMigrationRunner>();
         runner.MigrateUp();
+    }
+
+    private static void ConfigureDatabase(IMigrationRunnerBuilder rb, IDbConnection dbConnection)
+    {
+        switch (dbConnection)
+        {
+            case MySqlConnection:
+                rb.AddMySql5();
+                break;
+            case NpgsqlConnection:
+                rb.AddPostgres();
+                break;
+            case SQLiteConnection:
+                rb.AddSQLite();
+                break;
+            default:
+                throw new NotSupportedException($"Unsupported database connection type: {dbConnection.GetType().Name}");
+        }
+
+        rb.WithGlobalConnectionString(dbConnection.ConnectionString);
     }
 }

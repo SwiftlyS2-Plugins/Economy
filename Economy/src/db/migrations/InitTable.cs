@@ -12,7 +12,7 @@ public class InitTable : Migration
             Create.Table("EconomyPlayers")
                 .WithColumn("Id").AsInt32().PrimaryKey().Identity()
                 .WithColumn("SteamId64").AsInt64().NotNullable()
-                .WithColumn("Balance").AsFixedLengthString(8192).NotNullable().WithDefaultValue("{}");
+                .WithColumn("Balance").AsFixedLengthString(8192).NotNullable();
         }
     }
 
