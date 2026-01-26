@@ -14,7 +14,7 @@ namespace Economy.Database.Migrations;
 /// - Creates separate rows for each wallet type (key-value pair in JSON)
 /// - Converts balance values to decimal(18,2)
 /// - Sets appropriate timestamps
-/// - Drops the old EconomyPlayers table after successful migration
+/// - Renames the old EconomyPlayers table to EconomyPlayers_backup (preserves original data)
 /// - Supports MySQL, PostgreSQL, and SQLite with database-specific JSON parsing
 /// </summary>
 [Migration(1761193042)]
@@ -80,16 +80,28 @@ public class MigrateEconomyPlayersToBalance : Migration
                 )
             ");
 
-            // Drop the old table after successful migration
-            Delete.Table("EconomyPlayers");
+            // Rename the old table to backup instead of deleting it
+            Rename.Table("EconomyPlayers").To("EconomyPlayers_backup");
         }
     }
 
     public override void Down()
     {
-        // Recreate the old table structure
-        if (!Schema.Table("EconomyPlayers").Exists())
+        // Restore the old table from backup
+        if (Schema.Table("EconomyPlayers_backup").Exists())
         {
+            // If EconomyPlayers exists, delete it first
+            if (Schema.Table("EconomyPlayers").Exists())
+            {
+                Delete.Table("EconomyPlayers");
+            }
+
+            // Rename backup back to original name
+            Rename.Table("EconomyPlayers_backup").To("EconomyPlayers");
+        }
+        else if (!Schema.Table("EconomyPlayers").Exists())
+        {
+            // If no backup exists, recreate the table structure and migrate data back
             Create.Table("EconomyPlayers")
                 .WithColumn("Id").AsInt32().PrimaryKey().Identity()
                 .WithColumn("SteamId64").AsInt64().NotNullable()
