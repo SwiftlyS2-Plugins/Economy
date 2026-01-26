@@ -50,6 +50,10 @@
     <TrimmerRootAssembly Remove="FluentMigrator.Runner.Snowflake" />
     <TrimmerRootAssembly Remove="FluentMigrator.Runner.SqlServer" />
   </ItemGroup>
+  <ItemGroup>
+    <Folder Include="resources\exports\" />
+    <Folder Include="src\db\scripts\" />
+  </ItemGroup>
 
   <Target Name="CopyContractToExports" AfterTargets="Build">
     <Copy SourceFiles="$(MSBuildThisFileDirectory)../Economy.Contract/build/$(TargetFramework)/Economy.Contract.dll" DestinationFolder="$(MSBuildThisFileDirectory)resources/exports/" />

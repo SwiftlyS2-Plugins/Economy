@@ -96,14 +96,14 @@ public abstract class CommandBase
 		return results;
 	}
 
-	protected static bool TryParsePositiveAmount(string input, out int amount)
+	protected static bool TryParsePositiveAmount(string input, out decimal amount)
 	{
-		return int.TryParse(input, out amount) && amount > 0;
+		return decimal.TryParse(input, out amount) && amount > 0;
 	}
 
-	protected static bool TryParseAmount(string input, out int amount)
+	protected static bool TryParseAmount(string input, out decimal amount)
 	{
-		return int.TryParse(input, out amount);
+		return decimal.TryParse(input, out amount);
 	}
 
 	protected static bool ValidateWallet(Economy plugin, string walletKind, ICommandContext ctx, ILocalizer localizer, PluginConfig config)
