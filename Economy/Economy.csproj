@@ -52,7 +52,6 @@
   </ItemGroup>
   <ItemGroup>
     <Folder Include="resources\exports\" />
-    <Folder Include="src\db\scripts\" />
   </ItemGroup>
 
   <Target Name="CopyContractToExports" AfterTargets="Build">
