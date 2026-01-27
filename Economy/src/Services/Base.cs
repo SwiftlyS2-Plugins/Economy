@@ -20,6 +20,9 @@ public partial class EconomyService(ISwiftlyCore core, PluginConfig config)
 	// Online player balances (steamid -> walletKind -> balance)
 	private readonly ConcurrentDictionary<ulong, ConcurrentDictionary<string, decimal>> _playerBalances = new();
 
+	// Track initial balances loaded from DB to calculate deltas
+	private readonly ConcurrentDictionary<ulong, ConcurrentDictionary<string, decimal>> _initialBalances = new();
+
 	// Dirty tracking - players with unsaved changes
 	private readonly ConcurrentDictionary<ulong, bool> _dirtyPlayers = new();
 

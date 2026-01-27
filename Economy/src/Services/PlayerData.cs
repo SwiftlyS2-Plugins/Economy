@@ -17,6 +17,7 @@ public partial class EconomyService
 		{
 			var repository = CreateBalanceRepository();
 			var balances = _playerBalances.GetOrAdd(steamId, _ => new ConcurrentDictionary<string, decimal>());
+			var initialBalances = _initialBalances.GetOrAdd(steamId, _ => new ConcurrentDictionary<string, decimal>());
 			var balanceRecords = repository.GetAllBalances((long)steamId);
 
 			if (balanceRecords.Count > 0)
@@ -24,7 +25,10 @@ public partial class EconomyService
 				foreach (var record in balanceRecords)
 				{
 					if (_walletKinds.ContainsKey(record.WalletKind))
+					{
 						balances[record.WalletKind] = record.BalanceAmount;
+						initialBalances[record.WalletKind] = record.BalanceAmount;
+					}
 				}
 			}
 			else
@@ -34,6 +38,7 @@ public partial class EconomyService
 				{
 					repository.InsertBalance((long)steamId, walletKind, 0);
 					balances[walletKind] = 0;
+					initialBalances[walletKind] = 0;
 				}
 			}
 
@@ -81,11 +86,39 @@ public partial class EconomyService
 			if (!_playerBalances.TryGetValue(steamId, out var balances))
 				return false;
 
+			if (!_initialBalances.TryGetValue(steamId, out var initialBalances))
+				return false;
+
 			var repository = CreateBalanceRepository();
 
-			foreach (var (walletKind, balance) in balances)
+			// Calculate deltas and apply them to current DB values
+			foreach (var (walletKind, currentCachedBalance) in balances)
 			{
-				repository.UpsertBalance((long)steamId, walletKind, balance);
+				// Get the initial balance we loaded
+				initialBalances.TryGetValue(walletKind, out var initialBalance);
+				
+				// Calculate the change that happened during the session
+				var delta = currentCachedBalance - initialBalance;
+
+				if (delta != 0)
+				{
+					// Read current DB value (may have been modified externally)
+					var dbBalance = repository.GetBalance((long)steamId, walletKind);
+					var currentDbBalance = dbBalance?.BalanceAmount ?? 0;
+
+					// Apply delta to current DB value
+					var newBalance = currentDbBalance + delta;
+
+					// Apply negative balance constraint if configured
+					if (!_config.AllowNegativeBalance && newBalance < 0)
+						newBalance = 0;
+
+					repository.UpsertBalance((long)steamId, walletKind, newBalance);
+
+					// Update our cache and initial values to the new balance
+					balances[walletKind] = newBalance;
+					initialBalances[walletKind] = newBalance;
+				}
 			}
 
 			ClearDirty(steamId);
@@ -122,6 +155,7 @@ public partial class EconomyService
 	public void RemovePlayer(ulong steamId)
 	{
 		_playerBalances.TryRemove(steamId, out _);
+		_initialBalances.TryRemove(steamId, out _);
 		_onlinePlayers.TryRemove(steamId, out _);
 		_playerLocks.TryRemove(steamId, out _);
 		ClearDirty(steamId);
