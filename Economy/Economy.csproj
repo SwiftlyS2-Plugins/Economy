@@ -1,65 +1,66 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <PropertyGroup>
-    <TargetFramework>net10.0</TargetFramework>
-    <ImplicitUsings>enable</ImplicitUsings>
-    <Nullable>enable</Nullable>
-    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-    <GenerateAssemblyInfo>true</GenerateAssemblyInfo>
-    <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
-    <AssemblyName>Economy</AssemblyName>
-    <OutputPath>$(MSBuildThisFileDirectory)build/</OutputPath>
-    <PublishDir>$(OutputPath)publish/Economy</PublishDir>
-    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
-  </PropertyGroup>
+    <PropertyGroup>
+        <TargetFramework>net10.0</TargetFramework>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+        <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+        <GenerateAssemblyInfo>true</GenerateAssemblyInfo>
+        <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+        <AssemblyName>Economy</AssemblyName>
+        <OutputPath>$(MSBuildThisFileDirectory)build/</OutputPath>
+        <PublishDir>$(OutputPath)publish/Economy</PublishDir>
+        <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+    </PropertyGroup>
 
-  <ItemGroup>
-    <PackageReference Include="Dapper" Version="*" />
-    <PackageReference Include="Dommel" Version="*" />
-    <PackageReference Include="FluentMigrator" Version="*" />
-    <PackageReference Include="FluentMigrator.Runner.MySql" Version="*" />
-    <PackageReference Include="FluentMigrator.Runner.Postgres" Version="*" />
-    <PackageReference Include="FluentMigrator.Runner.SQLite" Version="*" />
-    <PackageReference Include="Microsoft.Data.Sqlite" Version="*" />
-    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="*" ExcludeAssets="runtime" PrivateAssets="all" />
-    <PackageReference Include="Microsoft.Extensions.Configuration" Version="*" ExcludeAssets="runtime" PrivateAssets="all" />
-    <PackageReference Include="Microsoft.Extensions.Configuration.Json" Version="*" ExcludeAssets="runtime" PrivateAssets="all" />
-    <PackageReference Include="Microsoft.Extensions.Configuration.Binder" Version="*" ExcludeAssets="runtime" PrivateAssets="all" />
-    <PackageReference Include="Microsoft.Extensions.Logging" Version="*" ExcludeAssets="runtime" PrivateAssets="all" />
-    <PackageReference Include="MySqlConnector" Version="*" />
-    <PackageReference Include="Npgsql" Version="*" />
-    <PackageReference Include="SwiftlyS2.CS2" Version="*-*" ExcludeAssets="runtime" PrivateAssets="all" />
-    <ProjectReference Include="../Economy.Contract/Economy.Contract.csproj">
-      <Private>false</Private>
-      <ExcludeAssets>runtime</ExcludeAssets>
-    </ProjectReference>
-    <None Update="resources\**\*.*" CopyToOutputDirectory="PreserveNewest" />
-  </ItemGroup>
+    <ItemGroup>
+        <PackageReference Include="Dapper" Version="*" />
+        <PackageReference Include="Dommel" Version="*" />
+        <PackageReference Include="FluentMigrator" Version="*" />
+        <PackageReference Include="FluentMigrator.Runner.MySql" Version="*" />
+        <PackageReference Include="FluentMigrator.Runner.Postgres" Version="*" />
+        <PackageReference Include="FluentMigrator.Runner.SQLite" Version="*" />
+        <PackageReference Include="Microsoft.Data.Sqlite" Version="*" />
+        <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="*" ExcludeAssets="runtime" PrivateAssets="all" />
+        <PackageReference Include="Microsoft.Extensions.Configuration" Version="*" ExcludeAssets="runtime" PrivateAssets="all" />
+        <PackageReference Include="Microsoft.Extensions.Configuration.Json" Version="*" ExcludeAssets="runtime" PrivateAssets="all" />
+        <PackageReference Include="Microsoft.Extensions.Configuration.Binder" Version="*" ExcludeAssets="runtime" PrivateAssets="all" />
+        <PackageReference Include="Microsoft.Extensions.Logging" Version="*" ExcludeAssets="runtime" PrivateAssets="all" />
+        <PackageReference Include="MySqlConnector" Version="*" />
+        <PackageReference Include="Npgsql" Version="*" />
+        <PackageReference Include="SwiftlyS2.CS2" Version="*-*" ExcludeAssets="runtime" PrivateAssets="all" />
+        <ProjectReference Include="../Economy.Contract/Economy.Contract.csproj">
+            <Private>false</Private>
+            <ExcludeAssets>runtime</ExcludeAssets>
+        </ProjectReference>
+        <None Update="resources\**\*.*" CopyToOutputDirectory="PreserveNewest" />
+    </ItemGroup>
 
-  <ItemGroup>
-    <Compile Remove="examples\**\*.cs" />
-  </ItemGroup>
+    <ItemGroup>
+        <Compile Remove="examples\**\*.cs" />
+    </ItemGroup>
 
-  <!-- Exclude unused FluentMigrator database providers from publish -->
-  <ItemGroup>
-    <TrimmerRootAssembly Remove="FluentMigrator.Runner.Db2" />
-    <TrimmerRootAssembly Remove="FluentMigrator.Runner.Firebird" />
-    <TrimmerRootAssembly Remove="FluentMigrator.Runner.Hana" />
-    <TrimmerRootAssembly Remove="FluentMigrator.Runner.Oracle" />
-    <TrimmerRootAssembly Remove="FluentMigrator.Runner.Redshift" />
-    <TrimmerRootAssembly Remove="FluentMigrator.Runner.Snowflake" />
-    <TrimmerRootAssembly Remove="FluentMigrator.Runner.SqlServer" />
-  </ItemGroup>
-  <ItemGroup>
-    <Folder Include="resources\exports\" />
-  </ItemGroup>
+    <!-- Exclude unused FluentMigrator database providers from publish -->
+    <ItemGroup>
+        <TrimmerRootAssembly Remove="FluentMigrator.Runner.Db2" />
+        <TrimmerRootAssembly Remove="FluentMigrator.Runner.Firebird" />
+        <TrimmerRootAssembly Remove="FluentMigrator.Runner.Hana" />
+        <TrimmerRootAssembly Remove="FluentMigrator.Runner.Oracle" />
+        <TrimmerRootAssembly Remove="FluentMigrator.Runner.Redshift" />
+        <TrimmerRootAssembly Remove="FluentMigrator.Runner.Snowflake" />
+        <TrimmerRootAssembly Remove="FluentMigrator.Runner.SqlServer" />
+    </ItemGroup>
 
-  <Target Name="CopyContractToExports" AfterTargets="Build">
-    <Copy SourceFiles="$(MSBuildThisFileDirectory)../Economy.Contract/build/$(TargetFramework)/Economy.Contract.dll" DestinationFolder="$(MSBuildThisFileDirectory)resources/exports/" />
-  </Target>
+    <ItemGroup>
+        <ProjectReference Include="../Economy.Contract/Economy.Contract.csproj" />
+    </ItemGroup>
 
-  <Target Name="CreateZip" AfterTargets="Publish">
-    <ZipDirectory SourceDirectory="$(PublishDir)../" DestinationFile="$(OutputPath)../$(AssemblyName).zip" Overwrite="true" />
-  </Target>
+    <Target Name="CopyContractToExports" AfterTargets="Build">
+        <Copy SourceFiles="$(MSBuildThisFileDirectory)../Economy.Contract/build/$(TargetFramework)/Economy.Contract.dll" DestinationFolder="$(MSBuildThisFileDirectory)resources/exports/" />
+    </Target>
+
+    <Target Name="CreateZip" AfterTargets="Publish">
+        <ZipDirectory SourceDirectory="$(PublishDir)../" DestinationFile="$(OutputPath)../$(AssemblyName).zip" Overwrite="true" />
+    </Target>
 
 </Project>
