@@ -1,6 +1,4 @@
 using System.Collections.Concurrent;
-using Economy.Database.Models;
-using Dommel;
 using Microsoft.Extensions.Logging;
 using SwiftlyS2.Shared.Players;
 
@@ -17,26 +15,31 @@ public partial class EconomyService
 
 		try
 		{
-			var user = LoadFromDatabase(steamId);
-			var balances = _playerBalances.GetOrAdd(steamId, _ => new ConcurrentDictionary<string, int>());
+			var repository = CreateBalanceRepository();
+			var balances = _playerBalances.GetOrAdd(steamId, _ => new ConcurrentDictionary<string, decimal>());
+			var initialBalances = _initialBalances.GetOrAdd(steamId, _ => new ConcurrentDictionary<string, decimal>());
+			var balanceRecords = repository.GetAllBalances((long)steamId);
 
-			if (user != null)
+			if (balanceRecords.Count > 0)
 			{
-				foreach (var (walletKind, balance) in user.Balance)
+				foreach (var record in balanceRecords)
 				{
-					if (_walletKinds.ContainsKey(walletKind))
-						balances[walletKind] = (int)balance;
+					if (_walletKinds.ContainsKey(record.WalletKind))
+					{
+						balances[record.WalletKind] = record.BalanceAmount;
+						initialBalances[record.WalletKind] = record.BalanceAmount;
+					}
 				}
 			}
 			else
 			{
-				// New player - create DB record
-				var newUser = new EconomyPlayer
+				// New player - create initial balance records with 0
+				foreach (var walletKind in _walletKinds.Keys)
 				{
-					SteamId64 = (long)steamId,
-					Balance = []
-				};
-				InsertToDatabase(newUser);
+					repository.InsertBalance((long)steamId, walletKind, 0);
+					balances[walletKind] = 0;
+					initialBalances[walletKind] = 0;
+				}
 			}
 
 			OnPlayerLoad?.Invoke(player);
@@ -71,15 +74,10 @@ public partial class EconomyService
 	public void SaveData(ulong steamId)
 	{
 		SaveDataInternal(steamId);
-		// Note: No OnPlayerSave event here since we don't have IPlayer reference
 	}
 
-	/// <summary>
-	/// Internal save method that returns true if data was actually saved
-	/// </summary>
 	private bool SaveDataInternal(ulong steamId)
 	{
-		// Skip if not dirty
 		if (!IsDirty(steamId))
 			return false;
 
@@ -88,24 +86,41 @@ public partial class EconomyService
 			if (!_playerBalances.TryGetValue(steamId, out var balances))
 				return false;
 
-			var user = LoadFromDatabase(steamId);
+			if (!_initialBalances.TryGetValue(steamId, out var initialBalances))
+				return false;
 
-			if (user == null)
+			var repository = CreateBalanceRepository();
+
+			// Calculate deltas and apply them to current DB values
+			foreach (var (walletKind, currentCachedBalance) in balances)
 			{
-				user = new EconomyPlayer
+				// Get the initial balance we loaded
+				initialBalances.TryGetValue(walletKind, out var initialBalance);
+				
+				// Calculate the change that happened during the session
+				var delta = currentCachedBalance - initialBalance;
+
+				if (delta != 0)
 				{
-					SteamId64 = (long)steamId,
-					Balance = []
-				};
-				InsertToDatabase(user);
+					// Read current DB value (may have been modified externally)
+					var dbBalance = repository.GetBalance((long)steamId, walletKind);
+					var currentDbBalance = dbBalance?.BalanceAmount ?? 0;
+
+					// Apply delta to current DB value
+					var newBalance = currentDbBalance + delta;
+
+					// Apply negative balance constraint if configured
+					if (!_config.AllowNegativeBalance && newBalance < 0)
+						newBalance = 0;
+
+					repository.UpsertBalance((long)steamId, walletKind, newBalance);
+
+					// Update our cache and initial values to the new balance
+					balances[walletKind] = newBalance;
+					initialBalances[walletKind] = newBalance;
+				}
 			}
 
-			foreach (var (walletKind, balance) in balances)
-			{
-				user.Balance[walletKind] = balance;
-			}
-
-			SaveToDatabase(user);
 			ClearDirty(steamId);
 			return true;
 		}
@@ -120,7 +135,6 @@ public partial class EconomyService
 
 	public void SaveAllOnlinePlayers()
 	{
-		// Take a snapshot to avoid iteration issues if players join/leave during save
 		var steamIds = GetAllOnlineSteamIds();
 
 		foreach (var steamId in steamIds)
@@ -141,49 +155,9 @@ public partial class EconomyService
 	public void RemovePlayer(ulong steamId)
 	{
 		_playerBalances.TryRemove(steamId, out _);
+		_initialBalances.TryRemove(steamId, out _);
 		_onlinePlayers.TryRemove(steamId, out _);
 		_playerLocks.TryRemove(steamId, out _);
 		ClearDirty(steamId);
-	}
-
-	/* ==================== Database Helpers ==================== */
-
-	private EconomyPlayer? LoadFromDatabase(ulong steamId)
-	{
-		var connection = _core.Database.GetConnection(_config.DatabaseConnection);
-		var users = connection.Select<EconomyPlayer>(u => u.SteamId64 == (long)steamId);
-		return users.FirstOrDefault();
-	}
-
-	private async Task<EconomyPlayer> LoadOrCreateFromDatabaseAsync(ulong steamId)
-	{
-		var connection = _core.Database.GetConnection(_config.DatabaseConnection);
-		var users = await connection.SelectAsync<EconomyPlayer>(u => u.SteamId64 == (long)steamId);
-		var user = users.FirstOrDefault();
-
-		if (user == null)
-		{
-			user = new EconomyPlayer
-			{
-				SteamId64 = (long)steamId,
-				Balance = []
-			};
-			var id = await connection.InsertAsync(user);
-			user.Id = (ulong)id;
-		}
-
-		return user;
-	}
-
-	private void InsertToDatabase(EconomyPlayer user)
-	{
-		var connection = _core.Database.GetConnection(_config.DatabaseConnection);
-		connection.Insert(user);
-	}
-
-	private void SaveToDatabase(EconomyPlayer user)
-	{
-		var connection = _core.Database.GetConnection(_config.DatabaseConnection);
-		connection.Update(user);
 	}
 }

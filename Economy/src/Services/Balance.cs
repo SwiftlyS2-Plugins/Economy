@@ -1,6 +1,4 @@
 using System.Collections.Concurrent;
-using Economy.Database.Models;
-using Dommel;
 using Microsoft.Extensions.Logging;
 using SwiftlyS2.Shared.Players;
 
@@ -10,20 +8,20 @@ public partial class EconomyService
 {
 	/* ==================== Get Balance ==================== */
 
-	public int GetPlayerBalance(IPlayer player, string walletKind)
+	public decimal GetPlayerBalance(IPlayer player, string walletKind)
 	{
 		if (player.IsFakeClient) return 0;
 		return GetPlayerBalance(player.SteamID, walletKind);
 	}
 
-	public int GetPlayerBalance(int playerId, string walletKind)
+	public decimal GetPlayerBalance(int playerId, string walletKind)
 	{
 		var player = _core.PlayerManager.GetPlayer(playerId);
 		if (player == null || player.IsFakeClient) return 0;
 		return GetPlayerBalance(player.SteamID, walletKind);
 	}
 
-	public int GetPlayerBalance(ulong steamId, string walletKind)
+	public decimal GetPlayerBalance(ulong steamId, string walletKind)
 	{
 		if (!_walletKinds.ContainsKey(walletKind))
 			throw new KeyNotFoundException($"Wallet kind '{walletKind}' does not exist.");
@@ -33,26 +31,27 @@ public partial class EconomyService
 			return cachedBalance;
 
 		// Fallback to DB for offline players
-		var user = LoadFromDatabase(steamId);
-		return user?.Balance.TryGetValue(walletKind, out var dbBal) == true ? (int)dbBal : 0;
+		var repository = CreateBalanceRepository();
+		var balance = repository.GetBalance((long)steamId, walletKind);
+		return balance?.BalanceAmount ?? 0;
 	}
 
 	/* ==================== Has Sufficient Funds ==================== */
 
-	public bool HasSufficientFunds(IPlayer player, string walletKind, int amount)
+	public bool HasSufficientFunds(IPlayer player, string walletKind, decimal amount)
 	{
 		if (player.IsFakeClient) return false;
 		return HasSufficientFunds(player.SteamID, walletKind, amount);
 	}
 
-	public bool HasSufficientFunds(int playerId, string walletKind, int amount)
+	public bool HasSufficientFunds(int playerId, string walletKind, decimal amount)
 	{
 		var player = _core.PlayerManager.GetPlayer(playerId);
 		if (player == null || player.IsFakeClient) return false;
 		return HasSufficientFunds(player.SteamID, walletKind, amount);
 	}
 
-	public bool HasSufficientFunds(ulong steamId, string walletKind, int amount)
+	public bool HasSufficientFunds(ulong steamId, string walletKind, decimal amount)
 	{
 		if (!_walletKinds.ContainsKey(walletKind))
 			throw new KeyNotFoundException($"Wallet kind '{walletKind}' does not exist.");
@@ -62,20 +61,20 @@ public partial class EconomyService
 
 	/* ==================== Set Balance ==================== */
 
-	public void SetPlayerBalance(IPlayer player, string walletKind, int amount)
+	public void SetPlayerBalance(IPlayer player, string walletKind, decimal amount)
 	{
 		if (player.IsFakeClient) return;
 		SetPlayerBalance(player.SteamID, walletKind, amount);
 	}
 
-	public void SetPlayerBalance(int playerId, string walletKind, int amount)
+	public void SetPlayerBalance(int playerId, string walletKind, decimal amount)
 	{
 		var player = _core.PlayerManager.GetPlayer(playerId);
 		if (player == null || player.IsFakeClient) return;
 		SetPlayerBalance(player.SteamID, walletKind, amount);
 	}
 
-	public void SetPlayerBalance(ulong steamId, string walletKind, int amount)
+	public void SetPlayerBalance(ulong steamId, string walletKind, decimal amount)
 	{
 		if (!_walletKinds.ContainsKey(walletKind))
 			throw new KeyNotFoundException($"Wallet kind '{walletKind}' does not exist.");
@@ -90,7 +89,7 @@ public partial class EconomyService
 			var playerLock = GetPlayerLock(steamId);
 			lock (playerLock)
 			{
-				var balances = _playerBalances.GetOrAdd(steamId, _ => new ConcurrentDictionary<string, int>());
+				var balances = _playerBalances.GetOrAdd(steamId, _ => new ConcurrentDictionary<string, decimal>());
 				balances.TryGetValue(walletKind, out var oldBalance);
 				balances[walletKind] = amount;
 
@@ -108,11 +107,11 @@ public partial class EconomyService
 				await asyncLock.WaitAsync();
 				try
 				{
-					var user = await LoadOrCreateFromDatabaseAsync(steamId);
-					user.Balance.TryGetValue(walletKind, out var oldBalance);
-					user.Balance[walletKind] = amount;
-
-					SaveToDatabase(user);
+					var repository = CreateBalanceRepository();
+					var existingBalance = repository.GetBalance((long)steamId, walletKind);
+					var oldBalance = existingBalance?.BalanceAmount ?? 0;
+					
+					repository.UpsertBalance((long)steamId, walletKind, amount);
 					OnPlayerBalanceChanged?.Invoke(steamId, walletKind, amount, oldBalance);
 				}
 				catch (Exception ex)
@@ -129,20 +128,20 @@ public partial class EconomyService
 
 	/* ==================== Add Balance ==================== */
 
-	public void AddPlayerBalance(IPlayer player, string walletKind, int amount)
+	public void AddPlayerBalance(IPlayer player, string walletKind, decimal amount)
 	{
 		if (player.IsFakeClient) return;
 		AddPlayerBalance(player.SteamID, walletKind, amount);
 	}
 
-	public void AddPlayerBalance(int playerId, string walletKind, int amount)
+	public void AddPlayerBalance(int playerId, string walletKind, decimal amount)
 	{
 		var player = _core.PlayerManager.GetPlayer(playerId);
 		if (player == null || player.IsFakeClient) return;
 		AddPlayerBalance(player.SteamID, walletKind, amount);
 	}
 
-	public void AddPlayerBalance(ulong steamId, string walletKind, int amount)
+	public void AddPlayerBalance(ulong steamId, string walletKind, decimal amount)
 	{
 		if (!_walletKinds.ContainsKey(walletKind))
 			throw new KeyNotFoundException($"Wallet kind '{walletKind}' does not exist.");
@@ -152,7 +151,7 @@ public partial class EconomyService
 			var playerLock = GetPlayerLock(steamId);
 			lock (playerLock)
 			{
-				var balances = _playerBalances.GetOrAdd(steamId, _ => new ConcurrentDictionary<string, int>());
+				var balances = _playerBalances.GetOrAdd(steamId, _ => new ConcurrentDictionary<string, decimal>());
 				balances.TryGetValue(walletKind, out var currentBalance);
 				var oldBalance = currentBalance;
 				currentBalance += amount;
@@ -172,13 +171,13 @@ public partial class EconomyService
 				await asyncLock.WaitAsync();
 				try
 				{
-					var user = await LoadOrCreateFromDatabaseAsync(steamId);
-					user.Balance.TryGetValue(walletKind, out var currentBalance);
+					var repository = CreateBalanceRepository();
+					var existingBalance = repository.GetBalance((long)steamId, walletKind);
+					var currentBalance = existingBalance?.BalanceAmount ?? 0;
 					var oldBalance = currentBalance;
 					currentBalance += amount;
-					user.Balance[walletKind] = currentBalance;
-
-					SaveToDatabase(user);
+					
+					repository.UpsertBalance((long)steamId, walletKind, currentBalance);
 					OnPlayerBalanceChanged?.Invoke(steamId, walletKind, currentBalance, oldBalance);
 				}
 				catch (Exception ex)
@@ -195,20 +194,20 @@ public partial class EconomyService
 
 	/* ==================== Subtract Balance ==================== */
 
-	public void SubtractPlayerBalance(IPlayer player, string walletKind, int amount)
+	public void SubtractPlayerBalance(IPlayer player, string walletKind, decimal amount)
 	{
 		if (player.IsFakeClient) return;
 		SubtractPlayerBalance(player.SteamID, walletKind, amount);
 	}
 
-	public void SubtractPlayerBalance(int playerId, string walletKind, int amount)
+	public void SubtractPlayerBalance(int playerId, string walletKind, decimal amount)
 	{
 		var player = _core.PlayerManager.GetPlayer(playerId);
 		if (player == null || player.IsFakeClient) return;
 		SubtractPlayerBalance(player.SteamID, walletKind, amount);
 	}
 
-	public void SubtractPlayerBalance(ulong steamId, string walletKind, int amount)
+	public void SubtractPlayerBalance(ulong steamId, string walletKind, decimal amount)
 	{
 		if (!_walletKinds.ContainsKey(walletKind))
 			throw new KeyNotFoundException($"Wallet kind '{walletKind}' does not exist.");
@@ -218,7 +217,7 @@ public partial class EconomyService
 			var playerLock = GetPlayerLock(steamId);
 			lock (playerLock)
 			{
-				var balances = _playerBalances.GetOrAdd(steamId, _ => new ConcurrentDictionary<string, int>());
+				var balances = _playerBalances.GetOrAdd(steamId, _ => new ConcurrentDictionary<string, decimal>());
 				balances.TryGetValue(walletKind, out var currentBalance);
 				var oldBalance = currentBalance;
 				currentBalance -= amount;
@@ -242,17 +241,16 @@ public partial class EconomyService
 				await asyncLock.WaitAsync();
 				try
 				{
-					var user = await LoadOrCreateFromDatabaseAsync(steamId);
-					user.Balance.TryGetValue(walletKind, out var currentBalance);
+					var repository = CreateBalanceRepository();
+					var existingBalance = repository.GetBalance((long)steamId, walletKind);
+					var currentBalance = existingBalance?.BalanceAmount ?? 0;
 					var oldBalance = currentBalance;
 					currentBalance -= amount;
 
 					if (!_config.AllowNegativeBalance && currentBalance < 0)
 						currentBalance = 0;
 
-					user.Balance[walletKind] = currentBalance;
-
-					SaveToDatabase(user);
+					repository.UpsertBalance((long)steamId, walletKind, currentBalance);
 					OnPlayerBalanceChanged?.Invoke(steamId, walletKind, currentBalance, oldBalance);
 				}
 				catch (Exception ex)

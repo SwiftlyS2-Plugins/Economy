@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using Economy.Config;
+using Economy.Database.Repositories;
 using SwiftlyS2.Shared;
 using SwiftlyS2.Shared.Players;
 
@@ -17,7 +18,10 @@ public partial class EconomyService(ISwiftlyCore core, PluginConfig config)
 	private readonly ConcurrentDictionary<string, bool> _walletKinds = new();
 
 	// Online player balances (steamid -> walletKind -> balance)
-	private readonly ConcurrentDictionary<ulong, ConcurrentDictionary<string, int>> _playerBalances = new();
+	private readonly ConcurrentDictionary<ulong, ConcurrentDictionary<string, decimal>> _playerBalances = new();
+
+	// Track initial balances loaded from DB to calculate deltas
+	private readonly ConcurrentDictionary<ulong, ConcurrentDictionary<string, decimal>> _initialBalances = new();
 
 	// Dirty tracking - players with unsaved changes
 	private readonly ConcurrentDictionary<ulong, bool> _dirtyPlayers = new();
@@ -36,8 +40,8 @@ public partial class EconomyService(ISwiftlyCore core, PluginConfig config)
 	private readonly ConcurrentDictionary<ulong, SemaphoreSlim> _asyncPlayerLocks = new();
 
 	// Events
-	public event Action<ulong, string, long, long>? OnPlayerBalanceChanged;
-	public event Action<ulong, ulong, string, long>? OnPlayerFundsTransferred;
+	public event Action<ulong, string, decimal, decimal>? OnPlayerBalanceChanged;
+	public event Action<ulong, ulong, string, decimal>? OnPlayerFundsTransferred;
 	public event Action<IPlayer>? OnPlayerLoad;
 	public event Action<IPlayer>? OnPlayerSave;
 
@@ -104,4 +108,13 @@ public partial class EconomyService(ISwiftlyCore core, PluginConfig config)
 	/// Returns a snapshot of all online player SteamIds to avoid iteration issues
 	/// </summary>
 	internal List<ulong> GetAllOnlineSteamIds() => [.. _onlinePlayers.Keys];
+
+	/// <summary>
+	/// Create a BalanceRepository instance for the configured database connection.
+	/// </summary>
+	internal BalanceRepository CreateBalanceRepository()
+	{
+		var connection = _core.Database.GetConnection(_config.DatabaseConnection);
+		return new BalanceRepository(connection, _core.Logger);
+	}
 }
