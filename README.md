@@ -63,7 +63,7 @@ The plugin uses a single `balance` table:
 | `id` | int | Primary key (auto-increment) |
 | `steam_id` | bigint | Player's Steam ID |
 | `wallet_kind` | varchar(255) | Wallet type identifier |
-| `balance` | decimal(19,4) | Current balance amount |
+| `balance` | decimal(18,2) | Current balance amount |
 | `created_at` | datetime | Record creation timestamp |
 | `updated_at` | datetime | Last update timestamp |
 
