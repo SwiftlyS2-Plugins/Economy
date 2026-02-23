@@ -1,0 +1,44 @@
+{
+"economy.prefix": "[silver][ [lime]经济系统 [silver]]",
+
+// 余额显示
+"economy.balance.header": "[silver]你的余额:",
+"economy.balance.item": " > [lime]{0}[silver]: [green]{1}",
+
+// 使用提示（{0}=主命令，{1}=子命令）
+"economy.usage.give": "[yellow]用法:!{0} {1} <目标> <金额> <钱包>",
+"economy.usage.take": "[yellow]用法:!{0} {1} <目标> <金额> <钱包>",
+"economy.usage.set": "[yellow]用法:!{0} {1} <目标> <金额> <钱包>",
+"economy.usage.pay": "[yellow]用法:!{0} {1} <玩家> <金额> <钱包>",
+"economy.usage.wallet_hint": "[silver]使用 [yellow]!{0} [silver]查看可用钱包",
+
+// 帮助
+"economy.help.available": "[silver]可用命令:[yellow]{0}",
+
+// 错误提示
+"economy.error.no_target": "[lightred]未找到目标。",
+"economy.error.invalid_amount": "[lightred]金额无效，必须为有效数字。",
+"economy.error.invalid_wallet": "[lightred]钱包类型“{0}”不存在。",
+"economy.error.no_permission": "[lightred]你没有权限使用此命令。",
+"economy.error.pay_self": "[lightred]你不能给自己付款。",
+"economy.error.insufficient_funds": "[lightred]余额不足。",
+
+// 钱包
+"economy.wallets.empty": "[yellow]未注册任何钱包类型。",
+
+// Give 命令
+"economy.give.success": "[silver]已给予 [lime]{2} [lime]{0} {1}[silver]。",
+"economy.give.received": "[silver]你从 [lime]{2} [silver]收到了 [lime]{0} {1}[silver]。",
+
+// Take 命令
+"economy.take.success": "[silver]已从 [lime]{2} [silver]扣除 [lime]{0} {1}[silver]。",
+"economy.take.removed": "[silver][lime]{0} {1}[silver] 已被 [lime]{2} [silver]扣除。",
+
+// Set 命令
+"economy.set.success": "[silver]已将 [lime]{0}[silver] 的余额设为 [lime]{1} {2}[silver]。",
+"economy.set.changed": "[silver]你的余额已被 [lime]{2} [silver]设为 [lime]{0} {1}[silver]。",
+
+// Pay 命令
+"economy.pay.success": "[silver]已向 [lime]{2} [silver]支付 [lime]{0} {1}[silver]。",
+"economy.pay.received": "[silver]你从 [lime]{2} [silver]收到了 [lime]{0} {1}[silver]。"
+}
