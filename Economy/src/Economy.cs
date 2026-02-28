@@ -17,7 +17,7 @@ using Microsoft.Extensions.Options;
 
 namespace Economy;
 
-[PluginMetadata(Id = "Economy", Version = "2.0.1", Name = "Economy", Author = "Swiftly Development Team", Description = "The base economy plugin for your server.")]
+[PluginMetadata(Id = "Economy", Version = "2.0.2", Name = "Economy", Author = "Swiftly Development Team", Description = "The base economy plugin for your server.")]
 public partial class Economy : BasePlugin
 {
 	private EconomyService? _economyService;
